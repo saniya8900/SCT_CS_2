@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🔐 Perfect Image Encryptor | Saniya</title>
+  <meta name="description" content="Professional-grade client-side image encryptor built by Saniya for SkillCraft Internship.">
+  <link rel="icon" href="https://cdn-icons-png.flaticon.com/512/3064/3064197.png" type="image/png">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .drop-zone {
+      border: 2px dashed #888;
+      transition: 0.3s;
+    }
+    .drop-zone.dragover {
+      border-color: #6366f1;
+      background-color: #f9f9ff;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.2);
+      backdrop-filter: blur(10px);
+    }
+    * {
+      user-select: none;
+    }
+  </style>
+</head>
+<body class="bg-gradient-to-br from-indigo-900 to-purple-700 min-h-screen text-white font-sans">
+  <header class="text-center py-6">
+    <h1 class="text-4xl font-bold drop-shadow-xl">🔐 Image Encryptor</h1>
+    <p class="text-lg mt-2">Saniya | SkillCraft Internship</p>
+  </header>
+
+  <main class="max-w-3xl w-full mx-auto bg-white text-black rounded-xl shadow-2xl p-6 glass">
+    <div id="drop-area" class="drop-zone w-full h-48 flex items-center justify-center text-center rounded-lg cursor-pointer">
+      <p class="text-gray-600">📂 Drag & drop an image here or click to upload</p>
+      <input type="file" id="image-input" accept="image/*" class="hidden" />
+    </div>
+
+    <canvas id="canvas" class="my-4 w-full rounded border border-gray-300"></canvas>
+
+    <div class="grid grid-cols-3 gap-4 text-sm text-gray-800 mb-4">
+      <label><input type="checkbox" value="swap" class="operation mr-2">Swap</label>
+      <label><input type="checkbox" value="add" class="operation mr-2">Add</label>
+      <label><input type="checkbox" value="invert" class="operation mr-2">Invert</label>
+    </div>
+
+    <input id="key" type="number" placeholder="Enter encryption key" class="w-full p-2 border border-gray-400 rounded mb-4" />
+
+    <div class="flex flex-wrap justify-between gap-4 mb-4">
+      <button id="encrypt" class="bg-indigo-600 px-4 py-2 rounded text-white hover:bg-indigo-700 w-full sm:w-auto">Encrypt</button>
+      <button id="decrypt" class="bg-green-600 px-4 py-2 rounded text-white hover:bg-green-700 w-full sm:w-auto">Decrypt</button>
+      <button id="download" class="bg-purple-600 px-4 py-2 rounded text-white hover:bg-purple-700 w-full sm:w-auto">Download</button>
+    </div>
+  </main>
+
+  <footer class="text-center mt-6 text-white text-sm">
+    © 2025 SkillCraft | Built with 💙 by Saniya
+  </footer>
+
+  <script>
+    const dropArea = document.getElementById('drop-area');
+    const imageInput = document.getElementById('image-input');
+    const canvas = document.getElementById('canvas');
+    const ctx = canvas.getContext('2d');
+    let originalImage = null;
+
+    dropArea.addEventListener('click', () => imageInput.click());
+    dropArea.addEventListener('dragover', e => {
+      e.preventDefault();
+      dropArea.classList.add('dragover');
+    });
+    dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+    dropArea.addEventListener('drop', e => {
+      e.preventDefault();
+      dropArea.classList.remove('dragover');
+      if (e.dataTransfer.files[0]) loadImage(e.dataTransfer.files[0]);
+    });
+    imageInput.addEventListener('change', () => loadImage(imageInput.files[0]));
+
+    function loadImage(file) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const img = new Image();
+        img.onload = () => {
+          canvas.width = img.width;
+          canvas.height = img.height;
+          ctx.drawImage(img, 0, 0);
+          originalImage = ctx.getImageData(0, 0, img.width, img.height);
+        };
+        img.src = reader.result;
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function getOps() {
+      return [...document.querySelectorAll(".operation:checked")].map(op => op.value);
+    }
+
+    function seedRandom(seed) {
+      let x = Math.sin(seed) * 10000;
+      return function () {
+        x = Math.sin(x) * 10000;
+        return x - Math.floor(x);
+      };
+    }
+
+    function applyOps(decrypt = false) {
+      if (!originalImage) return alert("Upload image first");
+      const key = parseInt(document.getElementById("key").value);
+      if (isNaN(key)) return alert("Enter a valid key");
+      const ops = getOps();
+      if (!ops.length) return alert("Select at least one operation");
+
+      const data = new Uint8ClampedArray(originalImage.data);
+      const count = data.length / 4;
+
+      const add = (i, k) => {
+        data[i] = (data[i] + k + 256) % 256;
+        data[i + 1] = (data[i + 1] + k + 256) % 256;
+        data[i + 2] = (data[i + 2] + k + 256) % 256;
+      };
+      const invert = i => {
+        data[i] = 255 - data[i];
+        data[i + 1] = 255 - data[i + 1];
+        data[i + 2] = 255 - data[i + 2];
+      };
+      const swap = k => {
+        const rand = seedRandom(k);
+        const idx = Array.from({ length: count }, (_, i) => i).sort(() => rand() - 0.5);
+        const temp = data.slice();
+        for (let i = 0; i < count; i++) for (let j = 0; j < 4; j++) data[i * 4 + j] = temp[idx[i] * 4 + j];
+      };
+      const unswap = k => {
+        const rand = seedRandom(k);
+        const idx = Array.from({ length: count }, (_, i) => i);
+        const shuffled = [...idx].sort(() => rand() - 0.5);
+        const temp = data.slice();
+        for (let i = 0; i < count; i++) for (let j = 0; j < 4; j++) data[shuffled[i] * 4 + j] = temp[i * 4 + j];
+      };
+
+      const sequence = decrypt ? [...ops].reverse() : ops;
+      for (const op of sequence) {
+        for (let i = 0; i < data.length; i += 4) {
+          if (op === "add") add(i, decrypt ? -key : key);
+          if (op === "invert") invert(i);
+        }
+        if (op === "swap") decrypt ? unswap(key) : swap(key);
+      }
+
+      const result = new ImageData(data, originalImage.width, originalImage.height);
+      ctx.putImageData(result, 0, 0);
+    }
+
+    document.getElementById("encrypt").onclick = () => applyOps(false);
+    document.getElementById("decrypt").onclick = () => applyOps(true);
+    document.getElementById("download").onclick = () => {
+      const link = document.createElement("a");
+      link.download = "output.png";
+      link.href = canvas.toDataURL();
+      link.click();
+    };
+  </script>
+</body>
+</html>
